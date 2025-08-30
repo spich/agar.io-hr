@@ -3,3 +3,7 @@ npm-debug.log
 .idea
 client/bower_components
 bin
+
+# React client build artifacts
+react-client/node_modules
+react-client/dist
