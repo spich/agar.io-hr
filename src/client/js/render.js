@@ -111,20 +111,34 @@ const drawCells = (cells, playerConfig, toggleMassState, borders, graph) => {
     }
 };
 
+// Feature 4: Enhanced grid drawing with 100px spacing and subtle appearance
 const drawGrid = (global, player, screen, graph) => {
     graph.lineWidth = 1;
     graph.strokeStyle = global.lineColor;
-    graph.globalAlpha = 0.15;
+    graph.globalAlpha = 0.1; // More subtle grid transparency
     graph.beginPath();
 
-    for (let x = -player.x; x < screen.width; x += screen.height / 18) {
-        graph.moveTo(x, 0);
-        graph.lineTo(x, screen.height);
+    // Draw grid lines every 100 pixels in game world
+    const gridSize = 100;
+    const startX = Math.floor(-player.x / gridSize) * gridSize;
+    const endX = startX + Math.ceil(screen.width / gridSize + 2) * gridSize;
+    const startY = Math.floor(-player.y / gridSize) * gridSize;
+    const endY = startY + Math.ceil(screen.height / gridSize + 2) * gridSize;
+
+    for (let x = startX; x <= endX; x += gridSize) {
+        const screenX = x + player.x;
+        if (screenX >= -gridSize && screenX <= screen.width + gridSize) {
+            graph.moveTo(screenX, 0);
+            graph.lineTo(screenX, screen.height);
+        }
     }
 
-    for (let y = -player.y; y < screen.height; y += screen.height / 18) {
-        graph.moveTo(0, y);
-        graph.lineTo(screen.width, y);
+    for (let y = startY; y <= endY; y += gridSize) {
+        const screenY = y + player.y;
+        if (screenY >= -gridSize && screenY <= screen.height + gridSize) {
+            graph.moveTo(0, screenY);
+            graph.lineTo(screen.width, screenY);
+        }
     }
 
     graph.stroke();
@@ -152,6 +166,68 @@ const drawErrorMessage = (message, graph, screen) => {
     graph.fillText(message, screen.width / 2, screen.height / 2);
 }
 
+// Feature 2: Minimap - shows overview of game world in top-left corner (200x200px)
+const drawMinimap = (global, player, borders, users, graph) => {
+    const minimapSize = 200;
+    const minimapPadding = 10;
+    const minimapX = minimapPadding;
+    const minimapY = minimapPadding;
+    
+    // Save current state
+    graph.save();
+    
+    // Draw minimap background
+    graph.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    graph.fillRect(minimapX, minimapY, minimapSize, minimapSize);
+    
+    // Draw minimap border
+    graph.strokeStyle = '#ffffff';
+    graph.lineWidth = 2;
+    graph.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
+    
+    // Calculate scaling factor from game world to minimap
+    const scaleX = minimapSize / global.game.width;
+    const scaleY = minimapSize / global.game.height;
+    
+    // Draw game boundaries on minimap
+    graph.strokeStyle = '#666666';
+    graph.lineWidth = 1;
+    graph.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
+    
+    // Draw other players on minimap
+    graph.fillStyle = 'rgba(255, 100, 100, 0.8)';
+    for (let user of users) {
+        if (user.id !== player.id && user.cells && user.cells.length > 0) {
+            for (let cell of user.cells) {
+                const mapX = minimapX + (cell.x * scaleX);
+                const mapY = minimapY + (cell.y * scaleY);
+                const radius = Math.max(2, cell.radius * scaleX * 0.5); // Minimum 2px radius on minimap
+                
+                graph.beginPath();
+                graph.arc(mapX, mapY, radius, 0, 2 * Math.PI);
+                graph.fill();
+            }
+        }
+    }
+    
+    // Draw current player on minimap (in different color)
+    if (player.cells && player.cells.length > 0) {
+        graph.fillStyle = 'rgba(100, 255, 100, 0.9)';
+        for (let cell of player.cells) {
+            const mapX = minimapX + (cell.x * scaleX);
+            const mapY = minimapY + (cell.y * scaleY);
+            const radius = Math.max(3, cell.radius * scaleX * 0.5); // Slightly larger for current player
+            
+            graph.beginPath();
+            graph.arc(mapX, mapY, radius, 0, 2 * Math.PI);
+            graph.fill();
+        }
+    }
+    
+    // Restore state
+    graph.restore();
+}
+
 module.exports = {
     drawFood,
     drawVirus,
@@ -159,5 +235,6 @@ module.exports = {
     drawCells,
     drawErrorMessage,
     drawGrid,
-    drawBorder
+    drawBorder,
+    drawMinimap
 };

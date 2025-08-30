@@ -140,29 +140,29 @@ window.canvas = new Canvas();
 window.chat = new ChatClient();
 
 var visibleBorderSetting = document.getElementById('visBord');
-visibleBorderSetting.onchange = settings.toggleBorder;
+visibleBorderSetting.onchange = function() { window.chat.toggleBorder(); };
 
 var showMassSetting = document.getElementById('showMass');
-showMassSetting.onchange = settings.toggleMass;
+showMassSetting.onchange = function() { window.chat.toggleMass(); };
 
 var continuitySetting = document.getElementById('continuity');
-continuitySetting.onchange = settings.toggleContinuity;
+continuitySetting.onchange = function() { window.chat.toggleContinuity(); };
 
 var roundFoodSetting = document.getElementById('roundFood');
-roundFoodSetting.onchange = settings.toggleRoundFood;
+roundFoodSetting.onchange = function() { window.chat.toggleRoundFood(); };
 
 var c = window.canvas.cv;
 var graph = c.getContext('2d');
 
-$("#feed").click(function () {
+document.getElementById("feed").onclick = function () {
     socket.emit('1');
     window.canvas.reenviar = false;
-});
+};
 
-$("#split").click(function () {
+document.getElementById("split").onclick = function () {
     socket.emit('2');
     window.canvas.reenviar = false;
-});
+};
 
 function handleDisconnect() {
     // Clean up heartbeat interval on disconnect
@@ -365,6 +365,12 @@ function gameLoop() {
 
         var cellsToDraw = [];
         for (var i = 0; i < users.length; i++) {
+            // Feature 1: Ensure each player has a consistent random color
+            // If server doesn't provide hue, generate random hue for client-side rendering
+            if (users[i].hue === undefined || users[i].hue === null) {
+                users[i].hue = Math.floor(Math.random() * 360);
+            }
+            
             let color = 'hsl(' + users[i].hue + ', 100%, 50%)';
             let borderColor = 'hsl(' + users[i].hue + ', 100%, 45%)';
             for (var j = 0; j < users[i].cells.length; j++) {
@@ -383,6 +389,9 @@ function gameLoop() {
             return obj1.mass - obj2.mass;
         });
         render.drawCells(cellsToDraw, playerConfig, global.toggleMassState, borders, graph);
+
+        // Feature 2: Draw minimap in top-left corner showing current player position
+        render.drawMinimap(global, player, borders, users, graph);
 
         // Note: Heartbeat is now sent via setInterval instead of here
     }
