@@ -5,7 +5,10 @@ function Game({ playerName, onReturnToMenu }) {
   const canvasRef = useRef(null)
   const [gameState, setGameState] = useState(null)
   const [mouseTarget, setMouseTarget] = useState({ x: 0, y: 0 })
+  // Use ref to access latest mouseTarget value in heartbeat interval
+  const mouseTargetRef = useRef({ x: 0, y: 0 })
 
+  // Separate useEffect for canvas setup and socket listeners - runs only when playerName changes
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -26,7 +29,7 @@ function Game({ playerName, onReturnToMenu }) {
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Set up socket event listeners
+    // Set up socket event listeners - only once per game session
     socketService.onWelcome((playerData, gameSizes) => {
       console.log('Welcome message received:', playerData, gameSizes)
     })
@@ -41,7 +44,7 @@ function Game({ playerName, onReturnToMenu }) {
       })
     })
 
-    // Game render loop
+    // Game render loop - runs independently of mouse target changes
     const gameLoop = () => {
       // Clear canvas
       ctx.fillStyle = '#111'
@@ -99,18 +102,34 @@ function Game({ playerName, onReturnToMenu }) {
 
     gameLoop()
 
-    // Send target updates regularly
-    const targetInterval = setInterval(() => {
-      if (socketService.isConnected) {
-        socketService.sendTarget(mouseTarget)
-      }
-    }, 1000 / 60) // 60 FPS
-
     return () => {
       window.removeEventListener('resize', resizeCanvas)
-      clearInterval(targetInterval)
     }
-  }, [playerName, gameState, mouseTarget])
+  }, [playerName]) // Only depends on playerName, not gameState or mouseTarget
+
+  // Separate useEffect for heartbeat interval - runs continuously while connected
+  useEffect(() => {
+    let targetInterval
+    
+    // Start heartbeat interval to continuously send mouse target to server
+    const startHeartbeat = () => {
+      targetInterval = setInterval(() => {
+        if (socketService.isConnected && mouseTargetRef.current) {
+          // Send current mouse target as heartbeat to maintain connection
+          socketService.sendTarget(mouseTargetRef.current)
+        }
+      }, 1000 / 60) // 60 FPS - ensures smooth gameplay and maintains connection
+    }
+
+    startHeartbeat()
+
+    return () => {
+      // Clean up interval only when component unmounts or effect re-runs
+      if (targetInterval) {
+        clearInterval(targetInterval)
+      }
+    }
+  }, []) // Empty dependency array - runs once and maintains interval throughout game session
 
   // Helper function to draw grid
   const drawGrid = (ctx, offsetX, offsetY) => {
@@ -207,7 +226,7 @@ function Game({ playerName, onReturnToMenu }) {
     })
   }
 
-  // Handle mouse movement for targeting
+  // Handle mouse movement for targeting - now updates both state and ref
   const handleMouseMove = (e) => {
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -216,6 +235,8 @@ function Game({ playerName, onReturnToMenu }) {
       y: e.clientY - rect.top - canvas.height / 2
     }
     setMouseTarget(target)
+    // Update ref so heartbeat interval can access latest value
+    mouseTargetRef.current = target
   }
 
   // Handle keyboard controls
