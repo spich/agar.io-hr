@@ -1,39 +1,38 @@
 import { useState, useEffect } from 'react'
+import socketService from '../services/socket'
 
 function Leaderboard() {
-  const [leaderboard, setLeaderboard] = useState([
-    { name: 'Player1', score: 1250 },
-    { name: 'Player2', score: 980 },
-    { name: 'Player3', score: 750 },
-    { name: 'Player4', score: 620 },
-    { name: 'Player5', score: 500 },
-  ])
+  const [leaderboard, setLeaderboard] = useState([])
+  const [totalPlayers, setTotalPlayers] = useState(0)
 
   useEffect(() => {
-    // TODO: Connect to real leaderboard data via WebSocket
-    // This is placeholder data that simulates changing scores
-    const interval = setInterval(() => {
-      setLeaderboard(prev => 
-        prev.map(player => ({
-          ...player,
-          score: Math.max(0, player.score + Math.floor(Math.random() * 21) - 10)
-        })).sort((a, b) => b.score - a.score)
-      )
-    }, 5000)
+    // Listen for leaderboard updates from server
+    socketService.onLeaderboardUpdate((data) => {
+      setLeaderboard(data.leaderboard || [])
+      setTotalPlayers(data.players || 0)
+    })
 
-    return () => clearInterval(interval)
+    // Cleanup is handled by socket service
+    return () => {}
   }, [])
 
   return (
     <div className="leaderboard">
       <h3>Leaderboard</h3>
-      <ol>
-        {leaderboard.map((player, index) => (
-          <li key={index}>
-            {player.name}: {player.score}
-          </li>
-        ))}
-      </ol>
+      {leaderboard.length === 0 ? (
+        <p>No players yet...</p>
+      ) : (
+        <ol>
+          {leaderboard.map((player, index) => (
+            <li key={player.id || index}>
+              {player.name || 'An unnamed cell'}: {Math.round(player.massTotal || 0)}
+            </li>
+          ))}
+        </ol>
+      )}
+      <div style={{ marginTop: '10px', fontSize: '12px', color: '#bbb' }}>
+        Total players: {totalPlayers}
+      </div>
     </div>
   )
 }

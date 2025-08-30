@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import socketService from '../services/socket'
 
-function Chat({ playerName }) {
+function Chat({ playerName }) {  // eslint-disable-line no-unused-vars
   const [messages, setMessages] = useState([
-    { type: 'system', text: 'Welcome to Agar.io HR!' },
-    { type: 'system', text: 'Chat functionality coming soon...' },
+    { type: 'system', text: 'Welcome to Agar.io HR!', timestamp: Date.now() },
   ])
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef(null)
@@ -16,6 +16,49 @@ function Chat({ playerName }) {
     scrollToBottom()
   }, [messages])
 
+  useEffect(() => {
+    // Listen for chat messages from server
+    socketService.onChatMessage((data) => {
+      const newMessage = {
+        type: 'player',
+        text: `${data.sender}: ${data.message}`,
+        timestamp: Date.now()
+      }
+      setMessages(prev => [...prev, newMessage])
+    })
+
+    // Listen for system messages
+    socketService.onSystemMessage((message) => {
+      const systemMessage = {
+        type: 'system',
+        text: message,
+        timestamp: Date.now()
+      }
+      setMessages(prev => [...prev, systemMessage])
+    })
+
+    // Listen for player join/disconnect events
+    socketService.onPlayerJoin((data) => {
+      const joinMessage = {
+        type: 'system', 
+        text: `${data.name || 'An unnamed cell'} joined the game`,
+        timestamp: Date.now()
+      }
+      setMessages(prev => [...prev, joinMessage])
+    })
+
+    socketService.onPlayerDisconnect((data) => {
+      const leaveMessage = {
+        type: 'system',
+        text: `${data.name || 'An unnamed cell'} left the game`, 
+        timestamp: Date.now()
+      }
+      setMessages(prev => [...prev, leaveMessage])
+    })
+
+    return () => {}
+  }, [])
+
   const handleSendMessage = (e) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       // Handle commands
@@ -25,32 +68,44 @@ function Chat({ playerName }) {
         return
       }
 
-      // Add message to chat
-      const newMessage = {
-        type: 'player',
-        text: `${playerName}: ${inputValue}`,
-        timestamp: Date.now()
-      }
-      
-      setMessages(prev => [...prev, newMessage])
+      // Send message to server
+      socketService.sendChatMessage(inputValue.substring(0, 35)) // Limit message length
       setInputValue('')
-      
-      // TODO: Send message via WebSocket to server
-      console.log('Sending message:', newMessage)
     }
     
     if (e.key === 'Escape') {
       setInputValue('')
-      // TODO: Return focus to game canvas
+      // Return focus to game canvas
+      const canvas = document.querySelector('.game-canvas')
+      if (canvas) canvas.focus()
     }
   }
 
   const handleCommand = (message) => {
-    // TODO: Implement chat commands like -help, -ping, etc.
+    // Handle local chat commands
     if (message.startsWith('-help')) {
       setMessages(prev => [...prev, {
         type: 'system',
-        text: 'Available commands: -help, -ping (more coming soon...)'
+        text: 'Available commands: -help, -ping (more coming soon...)',
+        timestamp: Date.now()
+      }])
+    } else if (message.startsWith('-ping')) {
+      // Simple ping check
+      const startTime = Date.now()
+      socketService.socket?.emit('pingcheck')
+      socketService.socket?.once('pongcheck', () => {
+        const latency = Date.now() - startTime
+        setMessages(prev => [...prev, {
+          type: 'system',
+          text: `Ping: ${latency}ms`,
+          timestamp: Date.now()
+        }])
+      })
+    } else {
+      setMessages(prev => [...prev, {
+        type: 'system',
+        text: 'Unknown command. Type -help for available commands.',
+        timestamp: Date.now()
       }])
     }
   }
