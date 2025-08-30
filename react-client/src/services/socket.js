@@ -33,12 +33,28 @@ class SocketService {
   // Join game with player name
   joinGame(playerName) {
     if (this.socket) {
-      const playerData = {
-        name: playerName,
-        screenWidth: window.innerWidth,
-        screenHeight: window.innerHeight
-      }
-      this.socket.emit('respawn', playerData)
+      // Store player name for later use
+      this.playerName = playerName
+      
+      // First emit respawn to start the join process
+      this.socket.emit('respawn')
+      
+      // Set up one-time listener for welcome message
+      this.socket.once('welcome', (playerSettings, gameSizes) => {
+        console.log('Welcome message received:', playerSettings, gameSizes)
+        
+        // Prepare player data with name and screen dimensions
+        const playerData = {
+          ...playerSettings,
+          name: playerName,
+          screenWidth: window.innerWidth,
+          screenHeight: window.innerHeight,
+          target: { x: 0, y: 0 }
+        }
+        
+        // Send gotit with player data to complete join process
+        this.socket.emit('gotit', playerData)
+      })
     }
   }
 
