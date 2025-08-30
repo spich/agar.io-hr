@@ -6,7 +6,7 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http, {
     cors: {
-        origin: ["http://localhost:3001", "http://127.0.0.1:3001"], // Allow React client
+        origin: ["http://localhost:3001", "http://127.0.0.1:3001", "http://localhost:3002", "http://127.0.0.1:3002"], // Allow React client
         methods: ["GET", "POST"],
         credentials: true
     }

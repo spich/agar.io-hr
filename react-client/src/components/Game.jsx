@@ -7,6 +7,12 @@ function Game({ playerName, onReturnToMenu }) {
   const [mouseTarget, setMouseTarget] = useState({ x: 0, y: 0 })
   // Use ref to access latest mouseTarget value in heartbeat interval
   const mouseTargetRef = useRef({ x: 0, y: 0 })
+  
+  // Arrow key movement state
+  const [pressedKeys, setPressedKeys] = useState({})
+  const [controlMode, setControlMode] = useState('mouse') // 'mouse' or 'keyboard'
+  const pressedKeysRef = useRef({})
+  const controlModeRef = useRef('mouse')
 
   // Separate useEffect for canvas setup and socket listeners - runs only when playerName changes
   useEffect(() => {
@@ -28,6 +34,37 @@ function Game({ playerName, onReturnToMenu }) {
 
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
+
+    // Set up keyboard event listeners for arrow keys
+    const handleKeyDown = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault()
+        // Switch to keyboard control mode when arrow keys are used
+        setControlMode('keyboard')
+        controlModeRef.current = 'keyboard'
+        
+        // Update pressed keys state
+        setPressedKeys(prev => ({ ...prev, [e.key]: true }))
+        pressedKeysRef.current = { ...pressedKeysRef.current, [e.key]: true }
+      }
+    }
+
+    const handleKeyUp = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        // Remove key from pressed keys
+        setPressedKeys(prev => {
+          const newKeys = { ...prev }
+          delete newKeys[e.key]
+          return newKeys
+        })
+        pressedKeysRef.current = { ...pressedKeysRef.current }
+        delete pressedKeysRef.current[e.key]
+      }
+    }
+
+    // Add keyboard listeners to window to catch arrow keys globally
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
 
     // Set up socket event listeners - only once per game session
     socketService.onWelcome((playerData, gameSizes) => {
@@ -104,6 +141,8 @@ function Game({ playerName, onReturnToMenu }) {
 
     return () => {
       window.removeEventListener('resize', resizeCanvas)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
     }
   }, [playerName]) // Only depends on playerName, not gameState or mouseTarget
 
@@ -111,12 +150,48 @@ function Game({ playerName, onReturnToMenu }) {
   useEffect(() => {
     let targetInterval
     
-    // Start heartbeat interval to continuously send mouse target to server
+    // Helper function to calculate keyboard target based on pressed arrow keys
+    const calculateKeyboardTarget = () => {
+      let deltaX = 0
+      let deltaY = 0
+      
+      if (pressedKeysRef.current.ArrowLeft) deltaX -= 1
+      if (pressedKeysRef.current.ArrowRight) deltaX += 1
+      if (pressedKeysRef.current.ArrowUp) deltaY -= 1
+      if (pressedKeysRef.current.ArrowDown) deltaY += 1
+      
+      // Normalize diagonal movement to maintain consistent speed
+      if (deltaX !== 0 && deltaY !== 0) {
+        const length = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+        deltaX /= length
+        deltaY /= length
+      }
+      
+      // Scale movement to a reasonable distance (similar to mouse range)
+      const moveDistance = 200
+      return {
+        x: deltaX * moveDistance,
+        y: deltaY * moveDistance
+      }
+    }
+    
+    // Start heartbeat interval to continuously send target to server
     const startHeartbeat = () => {
       targetInterval = setInterval(() => {
-        if (socketService.isConnected && mouseTargetRef.current) {
-          // Send current mouse target as heartbeat to maintain connection
-          socketService.sendTarget(mouseTargetRef.current)
+        if (socketService.isConnected) {
+          let targetToSend
+          
+          // Use keyboard target if in keyboard mode and keys are pressed
+          if (controlModeRef.current === 'keyboard' && 
+              Object.keys(pressedKeysRef.current).length > 0) {
+            targetToSend = calculateKeyboardTarget()
+          } else {
+            // Use mouse target
+            targetToSend = mouseTargetRef.current
+          }
+          
+          // Send current target as heartbeat to maintain connection
+          socketService.sendTarget(targetToSend)
         }
       }, 1000 / 60) // 60 FPS - ensures smooth gameplay and maintains connection
     }
@@ -202,7 +277,10 @@ function Game({ playerName, onReturnToMenu }) {
     player.cells.forEach(cell => {
       const x = cell.x + offsetX
       const y = cell.y + offsetY
-      const radius = Math.sqrt(cell.mass) * 0.4 // Convert mass to radius
+      
+      // Use the same radius calculation as the server: radius = 4 + sqrt(mass) * 6
+      // This ensures the player ball grows proportionally with mass
+      const radius = 4 + Math.sqrt(cell.mass) * 6
       
       if (x > -radius && x < ctx.canvas.width + radius && y > -radius && y < ctx.canvas.height + radius) {
         // Draw cell body
@@ -215,6 +293,12 @@ function Game({ playerName, onReturnToMenu }) {
         ctx.fill()
         ctx.stroke()
 
+        // Draw center dot (stays in the center of the ball)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+        ctx.beginPath()
+        ctx.arc(x, y, 2, 0, 2 * Math.PI)
+        ctx.fill()
+
         // Draw player name
         if (player.name && radius > 20) {
           ctx.fillStyle = 'white'
@@ -226,8 +310,14 @@ function Game({ playerName, onReturnToMenu }) {
     })
   }
 
-  // Handle mouse movement for targeting - now updates both state and ref
+  // Handle mouse movement for targeting - switches back to mouse control when mouse moves
   const handleMouseMove = (e) => {
+    // Switch back to mouse control when mouse is moved after keyboard usage
+    if (controlMode === 'keyboard') {
+      setControlMode('mouse')
+      controlModeRef.current = 'mouse'
+    }
+    
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     const target = {
