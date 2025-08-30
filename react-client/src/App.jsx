@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import socketService from './services/socket'
 import Menu from './components/Menu'
 import Game from './components/Game'
 import Leaderboard from './components/Leaderboard'
@@ -14,6 +15,8 @@ function App() {
   }
 
   const returnToMenu = () => {
+    // Disconnect from server when returning to menu
+    socketService.disconnect()
     setGameState('menu')
     setPlayerName('')
   }
