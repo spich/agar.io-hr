@@ -6,11 +6,17 @@ var global = require('./global');
 
 var playerNameInput = document.getElementById('playerNameInput');
 var socket;
+var heartbeatInterval; // Interval for sending periodic heartbeat to server
 
 var debug = function (args) {
     if (console && console.log) {
         console.log(args);
     }
+};
+
+// Client-side mass to radius calculation - same formula as server
+var massToRadius = function (mass) {
+    return 4 + Math.sqrt(mass) * 6;
 };
 
 if (/Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)) {
@@ -37,6 +43,16 @@ function startGame(type) {
     window.chat.registerFunctions();
     window.canvas.socket = socket;
     global.socket = socket;
+    
+    // Start periodic heartbeat to prevent disconnection (sends every 50ms)
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+    }
+    heartbeatInterval = setInterval(function() {
+        if (socket && socket.connected && window.canvas && window.canvas.target) {
+            socket.emit('0', window.canvas.target);
+        }
+    }, 50);
 }
 
 // Checks if the nick chosen contains valid alphanumeric characters (and underscores).
@@ -149,6 +165,11 @@ $("#split").click(function () {
 });
 
 function handleDisconnect() {
+    // Clean up heartbeat interval on disconnect
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
     socket.close();
     if (!global.kicked) { // We have a more specific error message 
         render.drawErrorMessage('Disconnected!', graph, global.screen);
@@ -254,6 +275,11 @@ function setupSocket(socket) {
     // Death.
     socket.on('RIP', function () {
         global.gameStart = false;
+        // Clean up heartbeat interval on death
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
         render.drawErrorMessage('You died!', graph, global.screen);
         window.setTimeout(() => {
             document.getElementById('gameAreaWrapper').style.opacity = 0;
@@ -347,7 +373,7 @@ function gameLoop() {
                     borderColor: borderColor,
                     mass: users[i].cells[j].mass,
                     name: users[i].name,
-                    radius: users[i].cells[j].radius,
+                    radius: massToRadius(users[i].cells[j].mass), // Calculate radius from mass using same formula as server
                     x: users[i].cells[j].x - player.x + global.screen.width / 2,
                     y: users[i].cells[j].y - player.y + global.screen.height / 2
                 });
@@ -358,7 +384,7 @@ function gameLoop() {
         });
         render.drawCells(cellsToDraw, playerConfig, global.toggleMassState, borders, graph);
 
-        socket.emit('0', window.canvas.target); // playerSendTarget "Heartbeat".
+        // Note: Heartbeat is now sent via setInterval instead of here
     }
 }
 
