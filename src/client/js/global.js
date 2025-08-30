@@ -9,7 +9,7 @@ module.exports = {
     KEY_UP: 38,
     KEY_RIGHT: 39,
     KEY_DOWN: 40,
-    borderDraw: false,
+    borderDraw: true, // Feature 3: Enable game border by default
     mobile: false,
     // Canvas
     screen: {
@@ -27,5 +27,5 @@ module.exports = {
     startPingTime: 0,
     toggleMassState: 0,
     backgroundColor: '#f2fbff',
-    lineColor: '#000000',
+    lineColor: '#cccccc', // Feature 4: Subtle grid color for background lines
 };
